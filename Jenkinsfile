@@ -1,51 +1,53 @@
 pipeline {
     agent any
 
+    tools {
+        maven 'Maven3'
+        jdk 'JDK17'
+    }
+
     environment {
-        DOCKER_IMAGE_NAME = "yomerysidro/automation-exercise-website"
-        DOCKER_IMAGE_TAG = "${env.BUILD_ID}"
-        CONTAINER_NAME = "automation-exercise-app"
-        DOCKER_REGISTRY_CREDENTIALS_ID = 'dockerhub-credentials'
+        DOCKER_IMAGE = 'yomerysidro/automation-exercise-website'
+        SONAR_PROJECT_KEY = 'automationexercise'
+        SONAR_PROJECT_NAME = 'AutomationExercise'
     }
 
     stages {
         stage('Clone Repository') {
             steps {
                 timeout(time: 10, unit: 'MINUTES') {
-                    git branch: 'main', url: 'https://github.com/yomerysidro/Automation-Exercise.git'
+                    git url: 'https://github.com/yomerysidro/Automation-Exercise.git', branch: 'main'
                 }
             }
         }
 
         stage('Verify Dockerfile exists') {
             steps {
-                echo "Verificando que el Dockerfile existe..."
+                echo 'Verificando que el Dockerfile existe...'
                 sh 'ls -la'
                 sh 'cat Dockerfile'
+            }
+        }
+
+        stage('Build with Maven') {
+            steps {
+                sh 'mvn clean package -DskipTests'
+            }
+        }
+
+        stage('SonarQube Analysis') {
+            steps {
+                withSonarQubeEnv('SonarQube') {
+                    sh 'mvn clean verify sonar:sonar -Dsonar.projectKey=automationexercise -Dsonar.projectName="AutomationExercise"'
+                }
             }
         }
 
         stage('Build Docker Image') {
             steps {
                 timeout(time: 10, unit: 'MINUTES') {
-                    sh "docker build -t ${DOCKER_IMAGE_NAME}:${DOCKER_IMAGE_TAG} ."
-                    sh "docker tag ${DOCKER_IMAGE_NAME}:${DOCKER_IMAGE_TAG} ${DOCKER_IMAGE_NAME}:latest"
-                }
-            }
-        }
-
-        stage('Push Docker Image to Registry (Optional)') {
-            when {
-                expression { return env.DOCKER_REGISTRY_CREDENTIALS_ID != null && false } // Pon true si deseas habilitar el push
-            }
-            steps {
-                timeout(time: 10, unit: 'MINUTES') {
-                    withCredentials([usernamePassword(credentialsId: env.DOCKER_REGISTRY_CREDENTIALS_ID, usernameVariable: 'DOCKER_USER', passwordVariable: 'DOCKER_PASS')]) {
-                        sh "echo $DOCKER_PASS | docker login -u $DOCKER_USER --password-stdin"
-                        sh "docker push ${DOCKER_IMAGE_NAME}:${DOCKER_IMAGE_TAG}"
-                        sh "docker push ${DOCKER_IMAGE_NAME}:latest"
-                        sh "docker logout"
-                    }
+                    sh "docker build -t ${DOCKER_IMAGE}:1 ."
+                    sh "docker tag ${DOCKER_IMAGE}:1 ${DOCKER_IMAGE}:latest"
                 }
             }
         }
@@ -54,10 +56,9 @@ pipeline {
             steps {
                 timeout(time: 10, unit: 'MINUTES') {
                     script {
-                        echo "Desplegando contenedor localmente como '${CONTAINER_NAME}'"
-                        sh "docker ps -q --filter name=${CONTAINER_NAME} | grep -q . && docker stop ${CONTAINER_NAME} && docker rm ${CONTAINER_NAME} || true"
-                        // Usa el puerto 8080 -> 8080 suponiendo que tu app corre en 8080
-                        sh "docker run -d --name ${CONTAINER_NAME} -p 8080:8080 ${DOCKER_IMAGE_NAME}:${DOCKER_IMAGE_TAG}"
+                        echo "Desplegando contenedor localmente como 'automation-exercise-app'"
+                        sh 'docker ps -q --filter name=automation-exercise-app | grep -q . && docker stop automation-exercise-app && docker rm automation-exercise-app || true'
+                        sh "docker run -d --name automation-exercise-app -p 8080:8080 ${DOCKER_IMAGE}:1"
                         echo "Aplicación desplegada: http://<IP_DEL_AGENTE>:8080"
                     }
                 }
@@ -67,14 +68,9 @@ pipeline {
 
     post {
         always {
-            echo "Pipeline finalizado. Limpieza del workspace..."
+            echo 'Pipeline finalizado. Limpieza del workspace...'
             cleanWs()
-        }
-        success {
-            echo "✅ Despliegue exitoso."
-        }
-        failure {
-            echo "❌ Error durante el pipeline."
+            echo '✅ Despliegue exitoso.'
         }
     }
 }
