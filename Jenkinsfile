@@ -2,8 +2,8 @@ pipeline {
     agent any
 
     tools {
-        maven 'MAVEN_HOME' // Debe coincidir con el nombre registrado en "Global Tool Configuration"
-        jdk 'JDK17'         // Asegúrate de que el JDK 17 está registrado con este nombre exacto
+        jdk 'JDK17'
+        maven 'MAVEN_HOME'
     }
 
     environment {
@@ -22,7 +22,7 @@ pipeline {
         stage('Build') {
             steps {
                 timeout(time: 10, unit: 'MINUTES') {
-                    sh "mvn clean compile"
+                    sh 'mvn clean compile'
                 }
             }
         }
@@ -30,7 +30,7 @@ pipeline {
         stage('Test') {
             steps {
                 timeout(time: 15, unit: 'MINUTES') {
-                    sh "mvn test"
+                    sh 'mvn test'
                 }
             }
             post {
@@ -43,7 +43,7 @@ pipeline {
         stage('Package') {
             steps {
                 timeout(time: 10, unit: 'MINUTES') {
-                    sh "mvn package -DskipTests"
+                    sh 'mvn package -DskipTests'
                 }
             }
             post {
@@ -57,7 +57,7 @@ pipeline {
             steps {
                 timeout(time: 15, unit: 'MINUTES') {
                     withSonarQubeEnv('sonarqube') {
-                        sh """
+                        sh '''
                             mvn sonar:sonar \
                                 -Dsonar.projectKey=AutomationExercise \
                                 -Dsonar.projectName='Automation Exercise' \
@@ -67,7 +67,7 @@ pipeline {
                                 -Dsonar.java.binaries=target/classes \
                                 -Dsonar.junit.reportsPath=target/surefire-reports \
                                 -Dsonar.jacoco.reportsPath=target/site/jacoco/jacoco.xml
-                        """
+                        '''
                     }
                 }
             }
@@ -85,9 +85,9 @@ pipeline {
             steps {
                 timeout(time: 5, unit: 'MINUTES') {
                     script {
-                        sh "ls -la target/*.jar"
+                        sh 'ls -la target/*.jar'
                         echo "JAR file ready for deployment"
-                        sh "java -jar target/*.jar --version || echo 'Version info not available'"
+                        sh 'java -jar target/*.jar --version || echo "Version info not available"'
                     }
                 }
             }
@@ -100,7 +100,6 @@ pipeline {
         }
         success {
             echo "Pipeline executed successfully! 🎉"
-            echo "Project approved by SonarQube and ready for deployment."
         }
         failure {
             echo "Pipeline failed! ❌"
