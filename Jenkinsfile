@@ -2,8 +2,7 @@ pipeline {
     agent any
 
     tools {
-        jdk 'JDK17'
-        maven 'MAVEN_HOME'
+        maven 'MAVEN_HOME'  // Asegúrate de que Maven esté configurado en Jenkins con este nombre
     }
 
     environment {
@@ -60,7 +59,7 @@ pipeline {
                         sh '''
                             mvn sonar:sonar \
                                 -Dsonar.projectKey=AutomationExercise \
-                                -Dsonar.projectName='Automation Exercise' \
+                                -Dsonar.projectName="Automation Exercise" \
                                 -Dsonar.projectVersion=1.0 \
                                 -Dsonar.sources=src/main/java \
                                 -Dsonar.tests=src/test/java \
