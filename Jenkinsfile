@@ -1,11 +1,6 @@
 pipeline {
     agent any
 
-    tools {
-        maven 'Maven3'
-        jdk 'JDK17'
-    }
-
     environment {
         DOCKER_IMAGE = 'yomerysidro/automation-exercise-website'
         SONAR_PROJECT_KEY = 'automationexercise'
