@@ -1,60 +1,93 @@
 pipeline {
     agent any
 
+    tools {
+        maven 'MAVEN_HOME' // Debe coincidir con el nombre registrado en "Global Tool Configuration"
+        jdk 'JDK17'         // Asegúrate de que el JDK 17 está registrado con este nombre exacto
+    }
+
     environment {
-        DOCKER_IMAGE = 'yomerysidro/automation-exercise-website'
-        SONAR_PROJECT_KEY = 'automationexercise'
-        SONAR_PROJECT_NAME = 'AutomationExercise'
+        MAVEN_OPTS = '-Xmx1024m'
     }
 
     stages {
-        stage('Clone Repository') {
+        stage('Clone') {
             steps {
                 timeout(time: 10, unit: 'MINUTES') {
-                    git url: 'https://github.com/yomerysidro/Automation-Exercise.git', branch: 'main'
+                    git branch: 'main', url: 'https://github.com/yomerysidro/Automation-Exercise.git'
                 }
             }
         }
 
-        stage('Verify Dockerfile exists') {
+        stage('Build') {
             steps {
-                echo 'Verificando que el Dockerfile existe...'
-                sh 'ls -la'
-                sh 'cat Dockerfile'
+                timeout(time: 10, unit: 'MINUTES') {
+                    sh "mvn clean compile"
+                }
             }
         }
 
-        stage('Build with Maven') {
+        stage('Test') {
             steps {
-                sh 'mvn clean package -DskipTests'
+                timeout(time: 15, unit: 'MINUTES') {
+                    sh "mvn test"
+                }
+            }
+            post {
+                always {
+                    junit allowEmptyResults: true, testResults: '**/target/surefire-reports/*.xml'
+                }
+            }
+        }
+
+        stage('Package') {
+            steps {
+                timeout(time: 10, unit: 'MINUTES') {
+                    sh "mvn package -DskipTests"
+                }
+            }
+            post {
+                success {
+                    archiveArtifacts artifacts: '**/target/*.jar', fingerprint: true
+                }
             }
         }
 
         stage('SonarQube Analysis') {
             steps {
-                withSonarQubeEnv('SonarQube') {
-                    sh 'mvn clean verify sonar:sonar -Dsonar.projectKey=automationexercise -Dsonar.projectName="AutomationExercise"'
+                timeout(time: 15, unit: 'MINUTES') {
+                    withSonarQubeEnv('sonarqube') {
+                        sh """
+                            mvn sonar:sonar \
+                                -Dsonar.projectKey=AutomationExercise \
+                                -Dsonar.projectName='Automation Exercise' \
+                                -Dsonar.projectVersion=1.0 \
+                                -Dsonar.sources=src/main/java \
+                                -Dsonar.tests=src/test/java \
+                                -Dsonar.java.binaries=target/classes \
+                                -Dsonar.junit.reportsPath=target/surefire-reports \
+                                -Dsonar.jacoco.reportsPath=target/site/jacoco/jacoco.xml
+                        """
+                    }
                 }
             }
         }
 
-        stage('Build Docker Image') {
+        stage('Quality Gate') {
             steps {
                 timeout(time: 10, unit: 'MINUTES') {
-                    sh "docker build -t ${DOCKER_IMAGE}:1 ."
-                    sh "docker tag ${DOCKER_IMAGE}:1 ${DOCKER_IMAGE}:latest"
+                    waitForQualityGate abortPipeline: true
                 }
             }
         }
 
-        stage('Deploy Locally') {
+        stage('Deploy Preparation') {
             steps {
-                timeout(time: 10, unit: 'MINUTES') {
+                timeout(time: 5, unit: 'MINUTES') {
                     script {
-                        echo "Desplegando contenedor localmente como 'automation-exercise-app'"
-                        sh 'docker ps -q --filter name=automation-exercise-app | grep -q . && docker stop automation-exercise-app && docker rm automation-exercise-app || true'
-                        sh "docker run -d --name automation-exercise-app -p 8080:8080 ${DOCKER_IMAGE}:1"
-                        echo "Aplicación desplegada: http://<IP_DEL_AGENTE>:8080"
+                        sh "ls -la target/*.jar"
+                        echo "JAR file ready for deployment"
+                        sh "java -jar target/*.jar --version || echo 'Version info not available'"
                     }
                 }
             }
@@ -63,9 +96,17 @@ pipeline {
 
     post {
         always {
-            echo 'Pipeline finalizado. Limpieza del workspace...'
             cleanWs()
-            echo '✅ Despliegue exitoso.'
+        }
+        success {
+            echo "Pipeline executed successfully! 🎉"
+            echo "Project approved by SonarQube and ready for deployment."
+        }
+        failure {
+            echo "Pipeline failed! ❌"
+        }
+        unstable {
+            echo "Pipeline completed but with warnings ⚠️"
         }
     }
 }
